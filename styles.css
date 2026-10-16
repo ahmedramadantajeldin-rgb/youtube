@@ -22,6 +22,7 @@ html {
   background: var(--bg);
   /* No pull-to-refresh / rubber-band bounce on the app shell */
   overscroll-behavior: none;
+  overscroll-behavior-y: none;
 }
 
 body {
@@ -34,6 +35,8 @@ body {
   line-height: 1.45;
   overflow-x: hidden;
   touch-action: manipulation;
+  overscroll-behavior: none;
+  overscroll-behavior-y: none;
   /* Respect notches and system bars */
   padding-top: env(safe-area-inset-top);
   padding-right: env(safe-area-inset-right);
@@ -54,7 +57,7 @@ body {
 .setup { display: flex; flex-direction: column; gap: 16px; }
 
 /* Installed app: the setup page is never shown, only the fallback below. */
-.is-standalone .setup { display: none; }
+.is-standalone .setup { display: none !important; }
 
 .resume {
   display: flex;
@@ -262,6 +265,40 @@ input::placeholder { color: var(--muted); }
 .status-text strong {
   display: inline;
   color: var(--text);
+}
+
+.device-banner {
+  padding: 10px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 12px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.device-banner strong {
+  color: var(--accent);
+}
+
+.advice-box {
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border-left: 4px solid var(--accent);
+  border-radius: 8px;
+  margin: 12px 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+.advice-box[hidden] {
+  display: none !important;
+}
+.advice-box h3 {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+.advice-box p {
+  margin: 4px 0;
 }
 
 /* Collapsible solutions details */

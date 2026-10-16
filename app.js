@@ -100,10 +100,13 @@
   function detectStandalone() {
     try {
       if (window.navigator.standalone === true) return true; // iOS Home Screen
+      var params = new URLSearchParams(location.search);
+      if (params.get('mode') === 'standalone') return true;
       if (window.matchMedia) {
         return window.matchMedia('(display-mode: standalone)').matches ||
           window.matchMedia('(display-mode: fullscreen)').matches ||
-          window.matchMedia('(display-mode: minimal-ui)').matches;
+          window.matchMedia('(display-mode: minimal-ui)').matches ||
+          window.matchMedia('(display-mode: window-controls-overlay)').matches;
       }
     } catch (e) { /* fall through */ }
     return false;
@@ -420,6 +423,68 @@
 
       window.addEventListener('appinstalled', function () {
         installCard.hidden = true;
+      });
+    }
+
+    // ---- Device Detection & Filter Helper -------------------------------
+    var detectedDeviceEl = $('detected-device-name');
+    var copyBtn = $('copy-filters-btn');
+    var copyStatus = $('copy-status');
+
+    var isIOSDevice = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    var isAndroidDevice = /android/i.test(navigator.userAgent);
+    var isWindowsDevice = /windows/i.test(navigator.userAgent);
+    var isMacDevice = /macintosh|mac os x/i.test(navigator.userAgent) && !isIOSDevice;
+
+    var detectedName = 'Desktop / Unknown Browser';
+    if (isIOSDevice) detectedName = 'iOS / iPadOS (Safari)';
+    else if (isAndroidDevice) detectedName = 'Android (' + (/chrome|crios/i.test(navigator.userAgent) ? 'Chrome' : 'Mobile Browser') + ')';
+    else if (isWindowsDevice) detectedName = 'Windows (' + (/edg/i.test(navigator.userAgent) ? 'Edge' : (/chrome/i.test(navigator.userAgent) ? 'Chrome' : 'Browser')) + ')';
+    else if (isMacDevice) detectedName = 'macOS (Safari / Chrome)';
+
+    if (detectedDeviceEl) detectedDeviceEl.textContent = detectedName;
+
+    var adviceAndroid = $('advice-android');
+    var adviceIos = $('advice-ios');
+    var adviceDesktop = $('advice-desktop');
+
+    if (isAndroidDevice && adviceAndroid) adviceAndroid.hidden = false;
+    else if (isIOSDevice && adviceIos) adviceIos.hidden = false;
+    else if (adviceDesktop) adviceDesktop.hidden = false;
+
+    function fallbackCopy(text) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try {
+        document.execCommand('copy');
+        if (copyStatus) copyStatus.textContent = 'Filter rules copied to clipboard!';
+        setTimeout(function () { if (copyStatus) copyStatus.textContent = ''; }, 3000);
+      } catch (e) {
+        if (copyStatus) copyStatus.textContent = 'Select and copy the rules from the box below.';
+      }
+      document.body.removeChild(ta);
+    }
+
+    if (copyBtn) {
+      copyBtn.addEventListener('click', function () {
+        var codeEl = $('filter-rules-code');
+        var text = codeEl ? codeEl.textContent : '';
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () {
+            if (copyStatus) copyStatus.textContent = 'Filter rules copied to clipboard!';
+            setTimeout(function () { if (copyStatus) copyStatus.textContent = ''; }, 3000);
+          }).catch(function () {
+            fallbackCopy(text);
+          });
+        } else {
+          fallbackCopy(text);
+        }
       });
     }
 

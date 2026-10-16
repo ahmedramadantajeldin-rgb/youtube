@@ -9,7 +9,7 @@
  *
  * To ship an update: change the VERSION string below.
  */
-var VERSION = 'v3';
+var VERSION = 'v5';
 var CACHE = 'yt-launcher-' + VERSION;
 
 // Relative to this file's location, so it works in a GitHub Pages subfolder.
@@ -19,6 +19,7 @@ var APP_SHELL = [
   'styles.css',
   'app.js',
   'manifest.json',
+  'youtube-shorts-filter.txt',
   'icons/icon-192.png',
   'icons/icon-512.png',
   'icons/icon-512-maskable.png',

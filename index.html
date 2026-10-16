@@ -18,6 +18,8 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="YouTube">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="application-name" content="YouTube">
+  <meta name="msapplication-navbutton-color" content="#0f0f1a">
 
   <link rel="stylesheet" href="styles.css">
 
@@ -126,6 +128,11 @@
 
       <section class="card" aria-labelledby="shorts-guide-title">
         <h2 id="shorts-guide-title">Shorts Filtering Status &amp; Solutions</h2>
+
+        <div class="device-banner">
+          <span>Detected Environment: <strong id="detected-device-name">Detecting...</strong></span>
+        </div>
+
         <div class="shorts-status-list">
           <div class="status-item status-active">
             <span class="status-badge active">&#x2713; Active in PWA</span>
@@ -147,37 +154,50 @@
           </div>
         </div>
 
-        <details class="shorts-solutions">
-          <summary>How to completely block Shorts shelves inside youtube.com</summary>
+        <div id="advice-android" class="advice-box" hidden>
+          <h3>Device Guidance: Android</h3>
+          <p><strong>Limitation:</strong> Google Chrome on Android blocks browser extensions from running, so an installed Chrome PWA cannot inject cosmetic filters into <code>youtube.com</code>.</p>
+          <p><strong>Solution:</strong> To get complete in-page Shorts removal on Android, use <strong>Firefox for Android</strong> or <strong>Kiwi Browser</strong> with the <strong>uBlock Origin</strong> extension installed, then import the filter rules below.</p>
+        </div>
+
+        <div id="advice-ios" class="advice-box" hidden>
+          <h3>Device Guidance: iOS / iPadOS</h3>
+          <p><strong>Limitation:</strong> Apple's Safari Web Clips (Home Screen PWAs) run in a sandboxed WebKit process that disables Safari Web Extensions.</p>
+          <p><strong>Solution:</strong> Use <strong>Safari</strong> directly with a content blocker (e.g. <strong>AdGuard</strong> or <strong>Unhook</strong>), or use the <strong>Subscriptions</strong> launch feed above to bypass Home Shorts.</p>
+        </div>
+
+        <div id="advice-desktop" class="advice-box" hidden>
+          <h3>Device Guidance: Desktop (Chrome / Edge / Firefox)</h3>
+          <p><strong>Supported:</strong> Content blocker extensions like <strong>uBlock Origin</strong> and <strong>Unhook</strong> run inside installed desktop PWAs! Adding the filter rules below works immediately inside your installed PWA window.</p>
+        </div>
+
+        <details class="shorts-solutions" open>
+          <summary>Cosmetic Filter Rules &amp; Download</summary>
           <div class="solutions-content">
-            <p>To eliminate Shorts carousels and shelves from YouTube's Home feed, recommendations, and search results on your device:</p>
-            <ol>
-              <li>
-                <strong>Browser Content Blocker (uBlock Origin / Adblock):</strong>
-                Add these cosmetic filter rules to hide Shorts elements across YouTube:
-                <pre class="code-block"><code>! Hide YouTube Shorts shelves on Home and Search
+            <p>Import these cosmetic filter rules into uBlock Origin, AdGuard, or your browser content blocker:</p>
+            <div class="row" style="margin-bottom: 8px;">
+              <button id="copy-filters-btn" class="btn btn-primary" type="button">Copy All Filter Rules</button>
+              <a href="youtube-shorts-filter.txt" download class="btn btn-ghost">Download .txt File</a>
+            </div>
+            <p id="copy-status" class="hint" role="status" aria-live="polite"></p>
+
+            <pre class="code-block"><code id="filter-rules-code">! Hide YouTube Shorts shelves on Home and Search
 youtube.com##ytd-rich-shelf-renderer[is-shorts]
 youtube.com##ytd-reel-shelf-renderer
 youtube.com##ytm-reel-shelf-renderer
+youtube.com##grid-shelf-renderer:has(a[href*="/shorts/"])
 
 ! Hide Shorts navigation buttons and links
 youtube.com##ytd-guide-entry-renderer:has(a[title="Shorts"])
 youtube.com##ytd-mini-guide-entry-renderer[aria-label="Shorts"]
+youtube.com##ytm-pivot-bar-item-renderer:has(div.pivot-shorts)
+youtube.com##ytm-pivot-bar-item-renderer[aria-label="Shorts"]
 youtube.com##a[href^="/shorts"]
 
 ! Hide Shorts in search results &amp; recommendations
 youtube.com##ytd-video-renderer:has(a[href*="/shorts/"])
-youtube.com##ytd-compact-video-renderer:has(a[href*="/shorts/"])</code></pre>
-              </li>
-              <li>
-                <strong>Browser Extensions (Desktop &amp; Mobile):</strong>
-                Install extensions such as <em>Unhook</em> or <em>Hide YouTube Shorts</em> in Chrome, Firefox, Kiwi Browser (Android), or Orion (iOS).
-              </li>
-              <li>
-                <strong>Native YouTube Option:</strong>
-                On any Shorts shelf on youtube.com, tap the three dots (⋮) and select <strong>Show fewer Shorts</strong> to suppress the shelf for 30 days.
-              </li>
-            </ol>
+youtube.com##ytd-compact-video-renderer:has(a[href*="/shorts/"])
+youtube.com##ytm-video-with-context-renderer:has(a[href*="/shorts/"])</code></pre>
           </div>
         </details>
       </section>

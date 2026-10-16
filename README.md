@@ -85,8 +85,17 @@ If you want complete DOM-level removal of Shorts carousels and recommendations w
 | Preserve ordinary short/vertical videos | **Yes** | Filters exclusively by `/shorts/` signal, never by duration |
 | Hide Shorts shelves inside youtube.com DOM | **No** (Cross-origin boundary) | Use uBlock Origin cosmetic rules or *Unhook* extension |
 | Hide Shorts from YouTube recommendations | **No** (Cross-origin boundary) | Use uBlock Origin cosmetic rules or *Unhook* extension |
-| Fullscreen with no browser bar | **No** (Platform limit) | Install YouTube directly via browser menu (*Install app*) |
+| Fullscreen with no browser bar | **No** (Cross-origin boundary) | Install YouTube directly via browser menu (*Install app* on youtube.com) |
 | Ad blocking | **No** (Platform limit) | YouTube Premium or browser content blocker |
+
+## Browser Branding, Top Toolbar & Scrolling Behavior
+
+- **Why the browser logo/bar appears on scrolling up:**
+  When a PWA hosted on an external origin (like `github.io`) navigates to `youtube.com`, mobile operating systems (Android Chrome and iOS Safari) enforce an **out-of-scope security banner** (Chrome Custom Tab / In-App Browser). When you scroll down, the browser hides this bar to give more screen area. When you **scroll up**, the native browser immediately reveals the top bar with the browser logo, domain, and controls.
+- **Webpage CSS cannot hide native browser UI:**
+  Web styles cannot style or hide native operating system window frames. However, the PWA manifest has been configured with `display: "standalone"`, `display_override: ["standalone", "fullscreen"]`, `start_url: "./?mode=standalone"`, and `overscroll-behavior: none` to ensure it never launches as a regular browser tab.
+- **The definitive borderless solution (Zero browser UI):**
+  To use YouTube completely full-screen without ANY top browser bar or logo reappearing on scroll, install YouTube's official PWA directly: navigate to `https://www.youtube.com/` in Chrome or Safari and choose **"Install app"** / **"Add to Home Screen"**. Because YouTube's domain is in-scope, no browser bar is ever rendered.
 
 ## Privacy and safety
 
@@ -103,7 +112,7 @@ If you want complete DOM-level removal of Shorts carousels and recommendations w
 4. **Get your HTTPS URL.** The address will be `https://USER.github.io/youtube-launcher/`.
 5. **Install on Android (Chrome).** Open your URL, tap **Install on this device** or Chrome menu → **Install app**.
 6. **Add to Home Screen on iPhone (Safari).** Open in Safari, tap **Share** → **Add to Home Screen**.
-7. **Update the app.** Raise `VERSION` in `service-worker.js` (e.g. `'v3'`) so devices pull the new files.
+7. **Update the app.** Raise `VERSION` in `service-worker.js` (e.g. `'v4'`) so devices pull the new files.
 
 ## Testing note
 
