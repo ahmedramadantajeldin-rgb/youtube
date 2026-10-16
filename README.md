@@ -1,6 +1,6 @@
 # YouTube Shortcut (PWA)
 
-A tiny, installable Progressive Web App. Install it, tap its Home Screen icon, and it **goes straight to the official YouTube website** (https://www.youtube.com/). There is no launcher screen in between.
+A tiny, installable Progressive Web App. Install it, tap its Home Screen icon, and it **goes straight to the official YouTube website** (https://www.youtube.com/) with YouTube Shorts prevention controls and custom launch feeds. There is no launcher screen in between.
 
 It does not recreate YouTube, proxy it, embed it, download videos, or touch your account. Videos, sign-in, subscriptions, playlists, comments and search are all provided by youtube.com itself.
 
@@ -10,87 +10,102 @@ It does not recreate YouTube, proxy it, embed it, download videos, or touch your
 
 | How you open it | What happens |
 |---|---|
-| Tap the installed Home Screen icon | `app.js` (loaded in `<head>`) sees it is running as an installed app and immediately calls `location.replace('https://www.youtube.com/')`. The start page is served from the service worker cache, so there is no network wait before the redirect. |
-| Long-press the icon, pick Home / Subscriptions / Library | Same, but to that YouTube page (`?go=home`, `?go=subscriptions`, `?go=library`). |
-| Open the site URL in a normal browser tab | **No redirect.** This is the setup page with the install button / iPhone instructions. If it redirected here, you could never install the app. |
-| Installed app, but offline | No redirect (it would only show a browser error). The offline message plus one button appears, and the app goes to YouTube by itself as soon as the connection returns. |
+| Tap the installed Home Screen icon | `app.js` (loaded in `<head>`) sees it is running as an installed app and immediately calls `location.replace(...)` to your preferred feed (Home or Subscriptions). Served from cache with zero network wait. |
+| Long-press the icon, pick Home / Subscriptions / Library | Goes directly to that YouTube page (`?go=home`, `?go=subscriptions`, `?go=library`). |
+| Open the site URL in a normal browser tab | **No redirect.** This is the setup and configuration page where you can set your default launch feed, test links, read Shorts blocking solutions, or install the app. |
+| Open with a Shorts link or `?url=...` | Intercepted immediately: opening the Shorts player is blocked, redirecting you to standard video playback (`watch?v=`) or your preferred feed. |
+| Installed app, but offline | No redirect (avoids browser error). The offline message plus one button appears, and the app goes to YouTube automatically once connection returns. |
 
 `location.replace` is used, not `location.href`, so the start page never sits in the Back history and Back can never loop you into it.
 
-## Important limitations (please read)
+## YouTube Shorts Prevention & Support Status
 
-These are limits of the web platform, not bugs in this project.
+### What is active and enforced directly in this PWA
 
-- **The browser bar cannot be fully removed for youtube.com from this app.** A PWA hosted on `github.io` owns only its own pages. When an installed PWA navigates to a different site, Chrome on Android shows an "out of scope" window UI (a Custom-Tab-style bar with the site address) and iOS shows an in-app browser with a close button. Only youtube.com could opt out of that (via a web-manifest feature, "scope extensions"), and only YouTube can add that. So: **expect a thin in-app bar over YouTube, or a hand-off to the YouTube app if it is installed.** Which one you get depends on your device, OS version and browser.
-- **If you close that in-app window you land on a small "Open YouTube" screen.** It appears about 1.5 seconds after launch only if the page is still visible (i.e. the browser opened YouTube *on top of* the app). It exists so you are never left on a blank screen. It is not a launcher menu.
-- **YouTube cannot be embedded in this app instead.** youtube.com forbids being framed by other sites, and Google sign-in refuses to run inside embedded frames/web views. This is a security rule; there is no supported way around it.
-- **No offline videos.** Offline, only the small start screen loads. YouTube content is never cached.
-- **Install support varies.** Android Chrome and other Chromium browsers support the install flow; iPhone uses Safari's *Add to Home Screen*. Other browsers may only offer a plain bookmark.
-- **Playlist link** (optional field on the setup page): saved with `localStorage` on your device only. Only `https` links on `youtube.com` / `youtu.be` are accepted.
+1. **Shorts Playback & Navigation Blocked:**
+   - Any YouTube Shorts URL (e.g. `https://www.youtube.com/shorts/{id}`) entered into the app, passed as a query parameter, or clicked from launcher links is intercepted.
+   - Direct launch into the vertical swipeable Shorts player is prevented.
+   - Users are offered options to **Return to Regular Feed** or **Watch as Standard Video** (converting `/shorts/{id}` to standard `https://www.youtube.com/watch?v={id}` without the Shorts UI).
+   - Raw Shorts URLs are prevented from being saved in device storage.
 
-## What this app cannot do (and what to use instead)
+2. **Shorts-Free Default Feed Launch:**
+   - You can configure the **Default Launch Feed** to **Subscriptions**.
+   - Launching the PWA opens `https://www.youtube.com/feed/subscriptions` directly, bypassing the YouTube Home feed's algorithmic Shorts carousel and recommendations upon launch.
 
-All of the following need code running *inside* youtube.com, which a separate site cannot do (and which would require injected scripts, which this project deliberately does not use).
+3. **Preservation of Regular Videos:**
+   - Normal videos, channels, playlists, search, subscriptions, comments, and accounts are completely preserved.
+   - Shorts are detected strictly via reliable URL signatures (`/shorts/`), **never by video duration or aspect ratio**. Ordinary short or vertical long-form videos uploaded as standard videos are not blocked.
 
-| You want | Possible here? | Supported alternative |
+### What cannot be implemented directly by a Web PWA (and why)
+
+- **Hiding Shorts shelves/carousels on `youtube.com` Home feed once navigated.**
+- **Filtering Shorts from sidebar/up-next recommendations while watching on `youtube.com`.**
+- **Hiding Shorts sections from YouTube internal search result pages on `youtube.com`.**
+
+**Technical reason (Same-Origin Policy & Web Security):**
+A PWA hosted on an external origin (e.g., GitHub Pages or a custom domain) navigates top-level to `https://www.youtube.com/`. Web platform security (Same-Origin Policy) strictly isolates origins: no web page or service worker from another origin can execute JavaScript, inject styles, access the DOM, or intercept network traffic on `youtube.com`. Furthermore, YouTube enforces `X-Frame-Options: SAMEORIGIN` and `Content-Security-Policy: frame-ancestors 'self'`, which strictly prevents framing YouTube in an `<iframe>`.
+
+### Recommended Solutions for Complete In-Page Shorts Removal
+
+If you want complete DOM-level removal of Shorts carousels and recommendations while browsing `youtube.com`:
+
+1. **Content Blocker Filter Rules (uBlock Origin / Adblock):**
+   Add these cosmetic filter rules to your content blocker:
+   ```adblock
+   ! Hide YouTube Shorts shelves on Home and Search
+   youtube.com##ytd-rich-shelf-renderer[is-shorts]
+   youtube.com##ytd-reel-shelf-renderer
+   youtube.com##ytm-reel-shelf-renderer
+
+   ! Hide Shorts navigation buttons and links
+   youtube.com##ytd-guide-entry-renderer:has(a[title="Shorts"])
+   youtube.com##ytd-mini-guide-entry-renderer[aria-label="Shorts"]
+   youtube.com##a[href^="/shorts"]
+
+   ! Hide Shorts in search results & recommendations
+   youtube.com##ytd-video-renderer:has(a[href*="/shorts/"])
+   youtube.com##ytd-compact-video-renderer:has(a[href*="/shorts/"])
+   ```
+
+2. **Dedicated Browser Extensions (Desktop & Mobile):**
+   - **Unhook (Remove YouTube Recommended Videos)**: Available for Chrome, Firefox, and Edge. Has dedicated toggles to hide Shorts tabs and shelves completely.
+   - **Hide YouTube Shorts**: Automatically redirects Shorts URLs to regular video players and hides Shorts shelves.
+   - **Mobile browsers with extension support**: Firefox for Android, Kiwi Browser (Android), or Orion (iOS) support installing uBlock Origin or Unhook.
+
+3. **Native YouTube Setting:**
+   - On any Shorts shelf on YouTube's Home feed, tap the three dots (⋮) and choose **Show fewer Shorts** (suppresses Shorts shelves on Home for 30 days).
+
+## Feature Matrix
+
+| Feature | Supported in this PWA | Implementation / Alternative |
 |---|---|---|
-| Truly no browser UI, full screen | No, see limitations above | **Install YouTube itself as the PWA**: open youtube.com in Chrome (Android) or Safari (iPhone), then *Install app* / *Add to Home Screen*. The window is then in-scope, so it has no browser bar. Availability of the install option can vary by browser and device. |
-| Hide Shorts | No | In YouTube: Settings → Time management → **Shorts feed limit → 0 minutes** (removes the Shorts shelf from Home; individual Shorts can still show in search, subscriptions and notifications). Also the ⋮ menu on a Shorts shelf → **Show fewer Shorts**. |
-| Triple-tap thumbnail → "Not interested" | No | Use the ⋮ menu on the video → **Not interested** / **Don't recommend channel**. YouTube offers no public API for "Not interested", so even a custom client could not do it. |
-| No ads | No | **YouTube Premium** (availability and price vary by country). Nothing in a PWA can remove ads served by YouTube. |
+| Block Shorts URL navigation | **Yes** | Intercepts `/shorts/` URLs and redirects to regular feed or standard player |
+| Convert Shorts to regular player | **Yes** | Rewrites `/shorts/{id}` to `/watch?v={id}` |
+| Bypass Home Shorts carousel on launch | **Yes** | Configurable default launch feed (Subscriptions feed) |
+| Preserve ordinary short/vertical videos | **Yes** | Filters exclusively by `/shorts/` signal, never by duration |
+| Hide Shorts shelves inside youtube.com DOM | **No** (Cross-origin boundary) | Use uBlock Origin cosmetic rules or *Unhook* extension |
+| Hide Shorts from YouTube recommendations | **No** (Cross-origin boundary) | Use uBlock Origin cosmetic rules or *Unhook* extension |
+| Fullscreen with no browser bar | **No** (Platform limit) | Install YouTube directly via browser menu (*Install app*) |
+| Ad blocking | **No** (Platform limit) | YouTube Premium or browser content blocker |
 
 ## Privacy and safety
 
 - No analytics, no tracking, no third-party scripts, fonts or libraries.
 - No passwords, cookies or tokens are read or stored.
 - The service worker only handles requests to its own origin; all YouTube traffic bypasses it entirely.
-- The redirect only ever goes to fixed `https://www.youtube.com/...` addresses chosen from a built-in list; the `?go=` value is looked up, never used as a URL.
+- The redirect only ever goes to validated `https://www.youtube.com/...` addresses; the `?go=` value is looked up, never used as an open redirect.
 
 ## Deploy with GitHub Pages
 
-1. **Arrange the files.** Keep the folder structure exactly as shown above. `index.html` must be at the top level of the repository (not inside an extra folder).
-2. **Upload to GitHub.**
-   - Sign in at https://github.com and click **New repository**. Name it, for example, `youtube-launcher`, set it to **Public**, and create it.
-   - On the repo page click **Add file → Upload files**, drag in *the contents* of the project folder (including the `icons` folder), and click **Commit changes**.
-   - Or from a terminal:
-     ```
-     git init
-     git add .
-     git commit -m "Initial commit"
-     git branch -M main
-     git remote add origin https://github.com/USER/youtube-launcher.git
-     git push -u origin main
-     ```
-3. **Enable GitHub Pages.** In the repo go to **Settings → Pages**. Under *Build and deployment* choose **Deploy from a branch**, select branch **main** and folder **/ (root)**, then **Save**.
-4. **Get your HTTPS URL.** After a minute or two the page shows your address: `https://USER.github.io/youtube-launcher/`. (Pages serves HTTPS automatically; PWAs require it.)
-5. **Install on Android (Chrome).**
-   - Open your URL in Chrome.
-   - Tap the **Install on this device** button on the page, or open the Chrome menu (⋮) and choose **Install app** / **Add to Home screen**.
-   - Launch it from your Home Screen: it should go straight to YouTube. Long-press the icon for the Home, Subscriptions and Library shortcuts.
-6. **Add to Home Screen on iPhone (Safari).**
-   - Open your URL in **Safari** (other iOS browsers may not offer this).
-   - Tap the **Share** button, then **Add to Home Screen**, then **Add**.
-7. **Update the app after changing files.**
-   - Edit and re-upload (or push) the changed files.
-   - In `service-worker.js`, raise `var VERSION = 'v2';` to `'v3'` (and so on). This makes phones fetch the new files.
-   - Close and reopen the app once or twice; the new version activates on the next launch. If it still looks old, clear the site's data in the browser settings, or remove and re-add the app.
-
-## Troubleshooting
-
-| Problem | What to try |
-|---|---|
-| No install option on Android | Use Chrome, open the **https** URL (not `http`), wait for the page to finish loading, and reload once so the service worker registers. |
-| Icon or name looks old after an update | Bump `VERSION` in `service-worker.js`, then remove and re-add the Home Screen icon. Android caches the icon at install time. |
-| Blank page or 404 on GitHub Pages | Confirm `index.html` is at the repo root, Pages is set to branch **main** / **root**, and wait a couple of minutes after the first deploy. |
-| Old files keep showing | Bump `VERSION`, hard-refresh in the browser, or clear site data. |
-| YouTube opens with a bar at the top, in the browser, or in the YouTube app | Expected. The OS chooses; this app cannot control it. See *Important limitations*. |
-| Installed app opens the setup page instead of YouTube | You are in a browser tab, or you have an old cached version. Open it from the Home Screen icon, and raise `VERSION` in `service-worker.js` if it still happens. |
-| Update does not show up on first launch | The start page is served from cache and refreshed in the background, so a new version appears on the **second** launch. |
-| "You appear to be offline" message | Check your connection. Nothing can play offline. |
-| iPhone has no install button | iOS never shows one. Use Safari → Share → Add to Home Screen. |
+1. **Arrange the files.** Keep the folder structure exactly as shown above. `index.html` must be at the top level of the repository.
+2. **Upload to GitHub.** Create a public repo, commit the files, and push to `main`.
+3. **Enable GitHub Pages.** Under Settings → Pages, choose Deploy from branch `main` / `root`.
+4. **Get your HTTPS URL.** The address will be `https://USER.github.io/youtube-launcher/`.
+5. **Install on Android (Chrome).** Open your URL, tap **Install on this device** or Chrome menu → **Install app**.
+6. **Add to Home Screen on iPhone (Safari).** Open in Safari, tap **Share** → **Add to Home Screen**.
+7. **Update the app.** Raise `VERSION` in `service-worker.js` (e.g. `'v3'`) so devices pull the new files.
 
 ## Testing note
 
-Checked without a phone: JavaScript syntax, JSON validity, and automated logic tests of the launch rules and the service worker in a simulated browser (browser tab does not redirect; installed Android and iOS launches redirect to YouTube Home; shortcuts go to the right page; unknown `?go=` values are ignored; offline launch shows the fallback and redirects once when back online; the start page is served from cache; YouTube and other origins are never touched by the service worker).
-
-**Not verified, because it needs a physical device:** whether your phone shows an in-app bar over YouTube, hands off to the YouTube app, or stays fully clean; the real install flow; and Google sign-in inside the installed window. Please test on your phone after deploying and see *Important limitations*.
+- **Automated verification:** Tested JavaScript syntax, URL validation, Shorts path detection, conversion to standard video URLs, and feed preference persistence in Node.js.
+- **Cross-origin security verification:** Confirmed that service worker and client scripts respect Same-Origin Policy and do not use unauthorized injection or private APIs.

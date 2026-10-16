@@ -3,6 +3,7 @@
 
   var YT_HOME = 'https://www.youtube.com/';
   var STORAGE_KEY = 'ytLauncher.playlistUrl';
+  var PREF_FEED_KEY = 'ytLauncher.defaultDestination';
 
   // Targets used by manifest shortcuts (e.g. ./?go=subscriptions).
   // Manifest shortcuts must stay inside the app scope, so they point here
@@ -27,10 +28,62 @@
   function isOfficialYouTubeUrl(value) {
     try {
       var u = new URL(value);
-      return u.protocol === 'https:' && ALLOWED_HOSTS.indexOf(u.hostname) !== -1;
+      return (u.protocol === 'https:' || u.protocol === 'http:') && ALLOWED_HOSTS.indexOf(u.hostname.toLowerCase()) !== -1;
     } catch (e) {
       return false;
     }
+  }
+
+  // Identifies YouTube Shorts URLs specifically using reliable URL path signatures,
+  // never relying on video duration or aspect ratio.
+  function isShortsUrl(value) {
+    try {
+      var u = new URL(value);
+      if (ALLOWED_HOSTS.indexOf(u.hostname.toLowerCase()) === -1) return false;
+      return /^\/shorts(\/.*)?$/i.test(u.pathname);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Extracts the video identifier from a /shorts/{videoId} path.
+  function extractShortsId(value) {
+    try {
+      var u = new URL(value);
+      var match = u.pathname.match(/^\/shorts\/([a-zA-Z0-9_-]+)/i);
+      return match ? match[1] : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Converts a Shorts URL into a standard YouTube watch URL, bypassing the vertical
+  // Shorts player and opening the standard web player instead.
+  function convertShortsToRegularUrl(value) {
+    try {
+      var u = new URL(value);
+      var id = extractShortsId(value);
+      if (!id) return null;
+      var regularUrl = new URL('https://www.youtube.com/watch');
+      regularUrl.searchParams.set('v', id);
+      if (u.searchParams.has('t')) {
+        regularUrl.searchParams.set('t', u.searchParams.get('t'));
+      }
+      return regularUrl.toString();
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Returns the user's preferred launch feed (e.g. Subscriptions to bypass the Home Shorts shelf).
+  function getPreferredFeed() {
+    try {
+      var saved = localStorage.getItem(PREF_FEED_KEY);
+      if (saved && Object.prototype.hasOwnProperty.call(GO_TARGETS, saved)) {
+        return GO_TARGETS[saved];
+      }
+    } catch (e) { /* ignore */ }
+    return YT_HOME;
   }
 
   // ---- Direct launch ----------------------------------------------------
@@ -38,11 +91,12 @@
   // is parsed, so there is no launcher screen when started from the Home Screen.
   //
   // - Installed app (standalone / fullscreen / minimal-ui / iOS standalone):
-  //   go straight to YouTube Home.
+  //   go straight to preferred YouTube feed (Home or Subscriptions).
   // - Manifest shortcut (?go=...): go to that YouTube page.
+  // - Direct video target (?url=...): if a Shorts URL is passed, intercept and
+  //   redirect to regular watch URL or preferred feed, preventing Shorts player launch.
   // - Plain browser tab: stay on this page, because this is where the install
-  //   button / iOS instructions live. Redirecting here would make it
-  //   impossible to install the app.
+  //   button / settings / instructions live.
   function detectStandalone() {
     try {
       if (window.navigator.standalone === true) return true; // iOS Home Screen
@@ -63,9 +117,24 @@
     return null;
   }
 
+  function readTargetUrl() {
+    try {
+      var urlParam = new URLSearchParams(location.search).get('url');
+      if (urlParam && isOfficialYouTubeUrl(urlParam)) {
+        if (isShortsUrl(urlParam)) {
+          var regular = convertShortsToRegularUrl(urlParam);
+          return regular || getPreferredFeed();
+        }
+        return urlParam;
+      }
+    } catch (e) { /* ignore */ }
+    return null;
+  }
+
   var isStandalone = detectStandalone();
   var goKey = readGoKey();
-  var launchTarget = goKey ? GO_TARGETS[goKey] : (isStandalone ? YT_HOME : null);
+  var targetUrl = readTargetUrl();
+  var launchTarget = targetUrl ? targetUrl : (goKey ? GO_TARGETS[goKey] : (isStandalone ? getPreferredFeed() : null));
   var redirected = false;
 
   if (isStandalone) document.documentElement.classList.add('is-standalone');
@@ -85,6 +154,14 @@
     var banner = $('offline-banner');
     var resume = $('resume');
     var resumeMsg = $('resume-msg');
+    var resumeOpen = $('resume-open');
+
+    function updateResumeLink() {
+      if (resumeOpen) {
+        resumeOpen.href = getPreferredFeed();
+      }
+    }
+    updateResumeLink();
 
     function showResume(text) {
       if (!resume) return;
@@ -102,20 +179,31 @@
       // Installed app that was launched offline: go in as soon as we're back.
       if (isStandalone && !redirected) {
         redirected = true;
-        location.replace(launchTarget || YT_HOME);
+        location.replace(launchTarget || getPreferredFeed());
       }
     });
     window.addEventListener('offline', updateOnlineState);
     updateOnlineState();
 
-    // Block navigation to YouTube while offline so the user sees a message
-    // instead of a browser error page.
+    // Prevent navigation to YouTube while offline, and intercept any direct Shorts
+    // links clicked in the app to prevent opening the vertical Shorts player.
     document.addEventListener('click', function (event) {
-      var link = event.target.closest && event.target.closest('a[href^="https://www.youtube.com"]');
-      if (link && !isOnline()) {
+      var link = event.target.closest && event.target.closest('a[href]');
+      if (!link) return;
+      var href = link.getAttribute('href') || '';
+      if (!href) return;
+
+      if (!isOnline() && href.indexOf('https://www.youtube.com') === 0) {
         event.preventDefault();
         banner.hidden = false;
         banner.scrollIntoView({ block: 'nearest' });
+        return;
+      }
+
+      if (isShortsUrl(href)) {
+        event.preventDefault();
+        var regular = convertShortsToRegularUrl(href);
+        location.href = regular || getPreferredFeed();
       }
     });
 
@@ -141,11 +229,90 @@
       }
     }
 
-    // ---- User playlist link --------------------------------------------
+    // ---- Default launch feed preference --------------------------------
+    var prefHome = $('pref-feed-home');
+    var prefSubs = $('pref-feed-subs');
+    var prefMsg = $('pref-msg');
+
+    function loadFeedPref() {
+      try {
+        var saved = localStorage.getItem(PREF_FEED_KEY);
+        if (saved === 'subscriptions') {
+          if (prefSubs) prefSubs.checked = true;
+        } else {
+          if (prefHome) prefHome.checked = true;
+        }
+      } catch (e) {
+        if (prefHome) prefHome.checked = true;
+      }
+    }
+    loadFeedPref();
+
+    function onPrefChange(value) {
+      try {
+        localStorage.setItem(PREF_FEED_KEY, value);
+        updateResumeLink();
+        if (prefMsg) {
+          prefMsg.textContent = value === 'subscriptions'
+            ? 'Saved: App will launch directly into Subscriptions (bypassing the Home Shorts shelf).'
+            : 'Saved: App will launch to YouTube Home.';
+        }
+      } catch (e) {
+        if (prefMsg) prefMsg.textContent = 'Could not save setting in this browser.';
+      }
+    }
+
+    if (prefHome) {
+      prefHome.addEventListener('change', function () {
+        if (prefHome.checked) onPrefChange('home');
+      });
+    }
+    if (prefSubs) {
+      prefSubs.addEventListener('change', function () {
+        if (prefSubs.checked) onPrefChange('subscriptions');
+      });
+    }
+
+    // ---- User playlist / video link & Shorts interceptor ---------------
     var playlistInput = $('playlist-input');
     var playlistMsg = $('playlist-msg');
+    var shortsNotice = $('shorts-notice');
+    var shortsConvertBtn = $('shorts-convert-btn');
+    var shortsFeedBtn = $('shorts-feed-btn');
+    var pendingShortsUrl = null;
 
-    function setMsg(text) { playlistMsg.textContent = text; }
+    function setMsg(text) { if (playlistMsg) playlistMsg.textContent = text; }
+
+    function hideShortsNotice() {
+      if (shortsNotice) shortsNotice.hidden = true;
+      pendingShortsUrl = null;
+    }
+
+    function showShortsNotice(url) {
+      pendingShortsUrl = url;
+      if (shortsNotice) {
+        shortsNotice.hidden = false;
+        shortsNotice.scrollIntoView({ block: 'nearest' });
+      }
+    }
+
+    if (shortsConvertBtn) {
+      shortsConvertBtn.addEventListener('click', function () {
+        if (!pendingShortsUrl) return;
+        var regular = convertShortsToRegularUrl(pendingShortsUrl);
+        if (regular) {
+          location.href = regular;
+        } else {
+          location.href = getPreferredFeed();
+        }
+      });
+    }
+
+    if (shortsFeedBtn) {
+      shortsFeedBtn.addEventListener('click', function () {
+        location.href = getPreferredFeed();
+      });
+    }
 
     function readSaved() {
       try { return localStorage.getItem(STORAGE_KEY) || ''; } catch (e) { return ''; }
@@ -162,9 +329,17 @@
     }
 
     var saved = readSaved();
-    if (saved && isOfficialYouTubeUrl(saved)) playlistInput.value = saved;
+    if (saved && isOfficialYouTubeUrl(saved)) {
+      if (isShortsUrl(saved)) {
+        // Discard any previously saved Shorts URLs
+        writeSaved('');
+      } else {
+        playlistInput.value = saved;
+      }
+    }
 
     function validatedInput() {
+      hideShortsNotice();
       var value = playlistInput.value.trim();
       if (!value) { setMsg('Paste a YouTube link first.'); return null; }
       if (!isOfficialYouTubeUrl(value)) {
@@ -179,6 +354,14 @@
       var value = validatedInput();
       if (!value) return;
       if (!isOnline()) { banner.hidden = false; setMsg('You are offline.'); return; }
+
+      // Intercept Shorts URLs: do not navigate directly to the Shorts player
+      if (isShortsUrl(value)) {
+        setMsg('YouTube Shorts playback is blocked in this app.');
+        showShortsNotice(value);
+        return;
+      }
+
       setMsg('');
       location.href = value;
     });
@@ -186,11 +369,19 @@
     $('playlist-save').addEventListener('click', function () {
       var value = validatedInput();
       if (!value) return;
+
+      if (isShortsUrl(value)) {
+        setMsg('Shorts links cannot be saved. Please use a regular video or playlist link.');
+        showShortsNotice(value);
+        return;
+      }
+
       setMsg(writeSaved(value) ? 'Saved on this device.' : 'Could not save in this browser.');
     });
 
     $('playlist-clear').addEventListener('click', function () {
       playlistInput.value = '';
+      hideShortsNotice();
       writeSaved('');
       setMsg('Cleared.');
     });
@@ -235,7 +426,6 @@
     // ---- Service worker -------------------------------------------------
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
       window.addEventListener('load', function () {
-        // Relative path so it works under /repository-name/ on GitHub Pages.
         navigator.serviceWorker.register('service-worker.js').catch(function () {
           /* The app still works without a service worker. */
         });

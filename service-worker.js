@@ -9,7 +9,7 @@
  *
  * To ship an update: change the VERSION string below.
  */
-var VERSION = 'v2';
+var VERSION = 'v3';
 var CACHE = 'yt-launcher-' + VERSION;
 
 // Relative to this file's location, so it works in a GitHub Pages subfolder.

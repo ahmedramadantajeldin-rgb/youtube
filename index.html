@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>YouTube</title>
-  <meta name="description" content="Installable shortcut that opens the official YouTube website directly.">
+  <meta name="description" content="Installable shortcut that opens YouTube with Shorts prevention and custom launch feeds.">
 
   <meta name="theme-color" content="#0f0f1a">
   <link rel="manifest" href="manifest.json">
@@ -45,7 +45,7 @@
       <header class="hero">
         <img class="hero-icon" src="icons/icon-192.png" width="96" height="96" alt="">
         <h1>YouTube</h1>
-        <p class="tagline">Install this app, then open it from your Home Screen. It goes straight to YouTube.</p>
+        <p class="tagline">Install this app, then open it from your Home Screen. It goes straight to YouTube with Shorts blocking features.</p>
       </header>
 
       <section id="install-card" class="card" hidden>
@@ -54,6 +54,30 @@
         <p id="ios-hint" class="hint" hidden>
           On iPhone: open this page in Safari, tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>.
         </p>
+      </section>
+
+      <section class="card" aria-labelledby="pref-title">
+        <h2 id="pref-title">Default Launch Feed</h2>
+        <p class="hint" style="margin-top: 0; margin-bottom: 12px;">
+          Choose where the app opens when launched from your Home Screen:
+        </p>
+        <div class="pref-options" role="radiogroup" aria-labelledby="pref-title">
+          <label class="pref-option" for="pref-feed-home">
+            <input type="radio" name="default-feed" value="home" id="pref-feed-home">
+            <div class="pref-label">
+              <strong>YouTube Home</strong>
+              <span class="pref-desc">Standard homepage (contains YouTube's algorithmic recommendations and Shorts shelf).</span>
+            </div>
+          </label>
+          <label class="pref-option" for="pref-feed-subs">
+            <input type="radio" name="default-feed" value="subscriptions" id="pref-feed-subs">
+            <div class="pref-label">
+              <strong>Subscriptions Feed (Recommended)</strong>
+              <span class="pref-desc">Direct chronological feed from channels you subscribe to; bypasses the Home algorithmic Shorts shelf.</span>
+            </div>
+          </label>
+        </div>
+        <p id="pref-msg" class="hint" role="status" aria-live="polite"></p>
       </section>
 
       <section class="card" aria-labelledby="shortcuts-title">
@@ -73,10 +97,10 @@
       </section>
 
       <section class="card" aria-labelledby="playlist-title">
-        <h2 id="playlist-title">Your playlist link</h2>
+        <h2 id="playlist-title">Your playlist or video link</h2>
         <form id="playlist-form" novalidate>
           <label for="playlist-input" class="sr-only">YouTube playlist or video URL</label>
-          <input id="playlist-input" type="url" inputmode="url" placeholder="Paste a YouTube playlist URL"
+          <input id="playlist-input" type="url" inputmode="url" placeholder="Paste a YouTube playlist or video URL"
                  autocomplete="off" autocapitalize="off" spellcheck="false">
           <div class="row">
             <button class="btn" type="submit" id="playlist-open">Open</button>
@@ -84,8 +108,78 @@
             <button class="btn btn-ghost" type="button" id="playlist-clear">Clear</button>
           </div>
         </form>
+
+        <div id="shorts-notice" class="shorts-notice-box" hidden>
+          <div class="shorts-notice-header">
+            <strong>&#x26A0; YouTube Shorts URL Detected</strong>
+            <p>Direct Shorts playback is prevented in this app. You can play this video in the regular YouTube player or return to the regular video feed.</p>
+          </div>
+          <div class="row shorts-actions">
+            <button class="btn btn-primary" type="button" id="shorts-convert-btn">Watch as Standard Video</button>
+            <button class="btn" type="button" id="shorts-feed-btn">Return to Feed</button>
+          </div>
+        </div>
+
         <p id="playlist-msg" class="hint" role="status" aria-live="polite"></p>
         <p class="hint">Saved only in this browser on your device. Nothing is sent anywhere.</p>
+      </section>
+
+      <section class="card" aria-labelledby="shorts-guide-title">
+        <h2 id="shorts-guide-title">Shorts Filtering Status &amp; Solutions</h2>
+        <div class="shorts-status-list">
+          <div class="status-item status-active">
+            <span class="status-badge active">&#x2713; Active in PWA</span>
+            <div class="status-text">
+              <strong>Shorts Playback &amp; Navigation Intercepted:</strong> Direct Shorts playback is blocked. Incoming or pasted Shorts links are intercepted, giving you options to convert to standard YouTube desktop/mobile player (watch?v=) or return to the regular feed.
+            </div>
+          </div>
+          <div class="status-item status-active">
+            <span class="status-badge active">&#x2713; Active in PWA</span>
+            <div class="status-text">
+              <strong>Bypass Algorithmic Shorts Shelves:</strong> Set the default launch destination to Subscriptions to bypass YouTube Home's algorithmic Shorts carousel completely upon app launch.
+            </div>
+          </div>
+          <div class="status-item status-notice">
+            <span class="status-badge notice">&#x2139; Platform Boundary</span>
+            <div class="status-text">
+              <strong>In-Page Feed &amp; Search Shelves on youtube.com:</strong> Because this PWA navigates to the official YouTube website (cross-origin), web platform security (Same-Origin Policy) strictly prevents external web apps from altering YouTube's internal DOM elements, recommendations, or search result shelves once you are browsing on youtube.com.
+            </div>
+          </div>
+        </div>
+
+        <details class="shorts-solutions">
+          <summary>How to completely block Shorts shelves inside youtube.com</summary>
+          <div class="solutions-content">
+            <p>To eliminate Shorts carousels and shelves from YouTube's Home feed, recommendations, and search results on your device:</p>
+            <ol>
+              <li>
+                <strong>Browser Content Blocker (uBlock Origin / Adblock):</strong>
+                Add these cosmetic filter rules to hide Shorts elements across YouTube:
+                <pre class="code-block"><code>! Hide YouTube Shorts shelves on Home and Search
+youtube.com##ytd-rich-shelf-renderer[is-shorts]
+youtube.com##ytd-reel-shelf-renderer
+youtube.com##ytm-reel-shelf-renderer
+
+! Hide Shorts navigation buttons and links
+youtube.com##ytd-guide-entry-renderer:has(a[title="Shorts"])
+youtube.com##ytd-mini-guide-entry-renderer[aria-label="Shorts"]
+youtube.com##a[href^="/shorts"]
+
+! Hide Shorts in search results &amp; recommendations
+youtube.com##ytd-video-renderer:has(a[href*="/shorts/"])
+youtube.com##ytd-compact-video-renderer:has(a[href*="/shorts/"])</code></pre>
+              </li>
+              <li>
+                <strong>Browser Extensions (Desktop &amp; Mobile):</strong>
+                Install extensions such as <em>Unhook</em> or <em>Hide YouTube Shorts</em> in Chrome, Firefox, Kiwi Browser (Android), or Orion (iOS).
+              </li>
+              <li>
+                <strong>Native YouTube Option:</strong>
+                On any Shorts shelf on youtube.com, tap the three dots (⋮) and select <strong>Show fewer Shorts</strong> to suppress the shelf for 30 days.
+              </li>
+            </ol>
+          </div>
+        </details>
       </section>
 
       <footer class="footer">
