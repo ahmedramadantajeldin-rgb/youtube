@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>YouTube</title>
+  <meta name="description" content="A lightweight launcher that opens the official YouTube website.">
+
+  <meta name="theme-color" content="#0f0f1a">
+  <link rel="manifest" href="manifest.json">
+
+  <!-- Icons -->
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+
+  <!-- iOS Home Screen metadata -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="YouTube">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app">
+    <header class="hero">
+      <img class="hero-icon" src="icons/icon-192.png" width="96" height="96" alt="">
+      <h1>YouTube</h1>
+      <p class="tagline">A lightweight launcher for the official YouTube website.</p>
+    </header>
+
+    <div id="offline-banner" class="banner" role="status" aria-live="polite" hidden>
+      You appear to be offline. Connect to the internet to open YouTube.
+    </div>
+
+    <a id="open-youtube" class="btn btn-primary" href="https://www.youtube.com/" rel="noopener">
+      Open YouTube
+    </a>
+
+    <section class="card" aria-labelledby="shortcuts-title">
+      <h2 id="shortcuts-title">Shortcuts</h2>
+      <div class="grid">
+        <a class="btn" data-yt href="https://www.youtube.com/" rel="noopener">Home</a>
+        <a class="btn" data-yt href="https://www.youtube.com/feed/subscriptions" rel="noopener">Subscriptions</a>
+        <a class="btn" data-yt href="https://www.youtube.com/feed/library" rel="noopener">Library</a>
+      </div>
+
+      <form id="search-form" action="https://www.youtube.com/results" method="get" role="search">
+        <label for="search-input" class="sr-only">Search YouTube</label>
+        <input id="search-input" name="search_query" type="search" placeholder="Search YouTube"
+               autocomplete="off" enterkeyhint="search" required>
+        <button class="btn" type="submit">Search</button>
+      </form>
+    </section>
+
+    <section class="card" aria-labelledby="playlist-title">
+      <h2 id="playlist-title">Your playlist link</h2>
+      <form id="playlist-form" novalidate>
+        <label for="playlist-input" class="sr-only">YouTube playlist or video URL</label>
+        <input id="playlist-input" type="url" inputmode="url" placeholder="Paste a YouTube playlist URL"
+               autocomplete="off" autocapitalize="off" spellcheck="false">
+        <div class="row">
+          <button class="btn" type="submit" id="playlist-open">Open</button>
+          <button class="btn btn-ghost" type="button" id="playlist-save">Save</button>
+          <button class="btn btn-ghost" type="button" id="playlist-clear">Clear</button>
+        </div>
+      </form>
+      <p id="playlist-msg" class="hint" role="status" aria-live="polite"></p>
+      <p class="hint">Saved only in this browser on your device. Nothing is sent anywhere.</p>
+    </section>
+
+    <section id="install-card" class="card" hidden>
+      <h2>Install this app</h2>
+      <button id="install-btn" class="btn" type="button" hidden>Install on this device</button>
+      <p id="ios-hint" class="hint" hidden>
+        On iPhone: open this page in Safari, tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>.
+      </p>
+    </section>
+
+    <footer class="footer">
+      <p>
+        Unofficial launcher. Videos, accounts and everything else are provided by
+        <a href="https://www.youtube.com/" rel="noopener">youtube.com</a>.
+        Depending on your device, YouTube may open in your browser or the YouTube app.
+      </p>
+    </footer>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
