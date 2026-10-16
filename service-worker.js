@@ -3,12 +3,13 @@
  * - Caches ONLY this app's own static files (same origin, same folder).
  * - Never touches youtube.com or any other origin.
  * - Never caches non-GET requests, query-string requests, or video/streams.
- * - Pages: network-first with a short timeout, falling back to the cached
- *   launcher, so a bad connection never causes an endless loading screen.
+ * - Pages: the app's own start page is served from cache instantly and
+ *   refreshed in the background, so launching from the Home Screen never waits
+ *   on the network before heading to YouTube (and still works offline).
  *
  * To ship an update: change the VERSION string below.
  */
-var VERSION = 'v1';
+var VERSION = 'v2';
 var CACHE = 'yt-launcher-' + VERSION;
 
 // Relative to this file's location, so it works in a GitHub Pages subfolder.
@@ -69,21 +70,25 @@ self.addEventListener('fetch', function (event) {
   var url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  // Page navigations: network-first, cached launcher as fallback.
+  // Page navigations to our own start page: cache first (instant launch),
+  // refreshed in the background. Query strings (?go=...) all map to the same
+  // cached index.html. Any other path is left to the network.
   if (request.mode === 'navigate') {
+    if (!/\/(index\.html)?$/.test(url.pathname)) return;
     event.respondWith(
-      fetchWithTimeout(request, NETWORK_TIMEOUT_MS)
-        .then(function (response) {
-          if (isCacheable(response) && !url.search) {
-            var copy = response.clone();
-            caches.open(CACHE).then(function (cache) { cache.put(request, copy); });
-          }
-          return response;
-        })
-        .catch(function () {
-          return caches.match(request, { ignoreSearch: true })
-            .then(function (hit) { return hit || caches.match('index.html'); });
-        })
+      caches.match('index.html').then(function (cached) {
+        var refresh = fetchWithTimeout(request, NETWORK_TIMEOUT_MS)
+          .then(function (response) {
+            if (isCacheable(response)) {
+              var copy = response.clone();
+              caches.open(CACHE).then(function (cache) { cache.put('index.html', copy); });
+            }
+            return response;
+          })
+          .catch(function () { return cached; });
+        event.waitUntil(refresh.catch(function () {}));
+        return cached || refresh;
+      })
     );
     return;
   }

@@ -2,7 +2,7 @@
   "id": "./",
   "name": "YouTube",
   "short_name": "YouTube",
-  "description": "A lightweight launcher that opens the official YouTube website.",
+  "description": "Opens the official YouTube website directly from your Home Screen.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

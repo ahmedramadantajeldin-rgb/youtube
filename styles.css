@@ -20,6 +20,8 @@ html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   background: var(--bg);
+  /* No pull-to-refresh / rubber-band bounce on the app shell */
+  overscroll-behavior: none;
 }
 
 body {
@@ -48,6 +50,22 @@ body {
   flex-direction: column;
   gap: 16px;
 }
+
+.setup { display: flex; flex-direction: column; gap: 16px; }
+
+/* Installed app: the setup page is never shown, only the fallback below. */
+.is-standalone .setup { display: none; }
+
+.resume {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding-top: 12vh;
+  text-align: center;
+}
+.resume .btn-primary { width: 100%; max-width: 320px; }
+.resume-msg { margin: 0; max-width: 32ch; color: var(--muted); }
 
 .hero { text-align: center; padding: 8px 0 4px; }
 .hero-icon { width: 96px; height: 96px; border-radius: 22px; }
