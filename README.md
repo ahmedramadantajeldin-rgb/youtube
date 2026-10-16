@@ -88,14 +88,23 @@ If you want complete DOM-level removal of Shorts carousels and recommendations w
 | Fullscreen with no browser bar | **No** (Cross-origin boundary) | Install YouTube directly via browser menu (*Install app* on youtube.com) |
 | Ad blocking | **No** (Platform limit) | YouTube Premium or browser content blocker |
 
-## Browser Branding, Top Toolbar & Scrolling Behavior
+## Browser Branding, Top Toolbar & Scrolling Behavior (Brave on Android / Galaxy S22)
 
-- **Why the browser logo/bar appears on scrolling up:**
-  When a PWA hosted on an external origin (like `github.io`) navigates to `youtube.com`, mobile operating systems (Android Chrome and iOS Safari) enforce an **out-of-scope security banner** (Chrome Custom Tab / In-App Browser). When you scroll down, the browser hides this bar to give more screen area. When you **scroll up**, the native browser immediately reveals the top bar with the browser logo, domain, and controls.
+- **The Exact Source of the Brave Branding and YouTube.com Header:**
+  The top interface that appears when scrolling up is **Brave's native Android Custom Tab (CCT) toolbar**. It does not come from your HTML, CSS, or JavaScript.
+- **Why it appears:**
+  The installed PWA is hosted on an external origin (e.g., GitHub Pages) with `scope: "./"`. When opened, it redirects top-level to `https://www.youtube.com/`. Because `youtube.com` is outside the PWA's manifest scope, Android's Chromium security sandbox forces the page into an out-of-scope Custom Tab. When you scroll down, Brave auto-hides this bar. When you **scroll up**, Brave pulls the bar back down into view to show the user they are browsing an external domain (`youtube.com`).
 - **Webpage CSS cannot hide native browser UI:**
-  Web styles cannot style or hide native operating system window frames. However, the PWA manifest has been configured with `display: "standalone"`, `display_override: ["standalone", "fullscreen"]`, `start_url: "./?mode=standalone"`, and `overscroll-behavior: none` to ensure it never launches as a regular browser tab.
-- **The definitive borderless solution (Zero browser UI):**
-  To use YouTube completely full-screen without ANY top browser bar or logo reappearing on scroll, install YouTube's official PWA directly: navigate to `https://www.youtube.com/` in Chrome or Safari and choose **"Install app"** / **"Add to Home Screen"**. Because YouTube's domain is in-scope, no browser bar is ever rendered.
+  No CSS rules (like `display: none`) can hide Brave's native toolbar because it is rendered by the Android OS / Brave app layer, completely outside the web page DOM.
+- **The 100% Borderless Standalone Solution in Brave:**
+  To browse YouTube in Brave on Android with **ZERO browser toolbar, zero Brave branding, and zero header on scrolling**:
+  1. Open Brave on your Samsung Galaxy S22.
+  2. Navigate directly to `https://www.youtube.com/`.
+  3. Tap the three dots menu (⋮) on the bottom right or top right.
+  4. Select **Install app** (or **Add to Home screen**).
+  5. Launch the app from the newly created Home Screen icon.
+  
+  **Why this works:** YouTube's official Web App Manifest has `scope: "https://www.youtube.com/"`. Because you are browsing within the manifest's declared scope, Brave launches it as an **in-scope WebAPK**. Brave's Custom Tab toolbar is completely suppressed, and scrolling up or down will never reveal any browser branding.
 
 ## Privacy and safety
 

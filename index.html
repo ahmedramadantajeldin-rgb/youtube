@@ -155,9 +155,9 @@
         </div>
 
         <div id="advice-android" class="advice-box" hidden>
-          <h3>Device Guidance: Android</h3>
-          <p><strong>Limitation:</strong> Google Chrome on Android blocks browser extensions from running, so an installed Chrome PWA cannot inject cosmetic filters into <code>youtube.com</code>.</p>
-          <p><strong>Solution:</strong> To get complete in-page Shorts removal on Android, use <strong>Firefox for Android</strong> or <strong>Kiwi Browser</strong> with the <strong>uBlock Origin</strong> extension installed, then import the filter rules below.</p>
+          <h3>Device Guidance: Android (Brave / Chrome / Samsung Internet)</h3>
+          <p><strong>Brave Toolbar on Scroll:</strong> When this shortcut PWA redirects to YouTube, Brave detects a cross-origin navigation outside the app's manifest scope. Android then loads YouTube inside a <em>Brave Custom Tab</em>, which drops down the top bar with YouTube.com and the Brave logo when scrolling up.</p>
+          <p><strong>100% Borderless Standalone Solution:</strong> Open <code>https://www.youtube.com/</code> directly in Brave on your device, tap the three dots (⋮) &rarr; <strong>Install app</strong> (or <em>Add to Home screen</em>). Because YouTube's domain is in-scope, Brave launches it as a native WebAPK with <strong>zero browser toolbar</strong> and no Brave branding on scroll.</p>
         </div>
 
         <div id="advice-ios" class="advice-box" hidden>
