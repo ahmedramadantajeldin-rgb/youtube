@@ -2,14 +2,33 @@
   "id": "./",
   "name": "YouTube",
   "short_name": "YouTube",
-  "description": "Opens the official YouTube website directly from your Home Screen.",
+  "description": "Opens the official YouTube website directly from your Home Screen with Shorts prevention.",
   "start_url": "./?mode=standalone",
   "scope": "./",
   "display": "standalone",
   "display_override": [
-    "standalone",
     "fullscreen",
+    "window-controls-overlay",
+    "standalone",
     "minimal-ui"
+  ],
+  "handle_links": "preferred",
+  "launch_handler": {
+    "client_mode": [
+      "navigate-existing",
+      "auto"
+    ]
+  },
+  "scope_extensions": [
+    {
+      "origin": "https://www.youtube.com"
+    },
+    {
+      "origin": "https://m.youtube.com"
+    },
+    {
+      "origin": "https://youtu.be"
+    }
   ],
   "orientation": "any",
   "theme_color": "#0f0f1a",
@@ -37,22 +56,40 @@
   ],
   "shortcuts": [
     {
+      "name": "Subscriptions (No Shorts)",
+      "short_name": "Subs",
+      "url": "./?go=subscriptions&mode=standalone",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
       "name": "Home",
       "short_name": "Home",
       "url": "./?go=home&mode=standalone",
-      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
-    },
-    {
-      "name": "Subscriptions",
-      "short_name": "Subs",
-      "url": "./?go=subscriptions&mode=standalone",
-      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     },
     {
       "name": "Library",
       "short_name": "Library",
       "url": "./?go=library&mode=standalone",
-      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     }
   ]
 }

@@ -375,3 +375,11 @@ input::placeholder { color: var(--muted); }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+
+/* Strict anti-pull-to-refresh and anti-toolbar bounce rules */
+html, body {
+  overscroll-behavior: none !important;
+  overscroll-behavior-y: none !important;
+  -webkit-overflow-scrolling: auto;
+}

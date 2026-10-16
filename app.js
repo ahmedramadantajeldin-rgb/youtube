@@ -1,506 +1,377 @@
+/* YouTube Shortcut PWA - Core Logic & Shorts Interceptor */
 (function () {
   'use strict';
 
-  var YT_HOME = 'https://www.youtube.com/';
-  var STORAGE_KEY = 'ytLauncher.playlistUrl';
-  var PREF_FEED_KEY = 'ytLauncher.defaultDestination';
+  var STORAGE_KEY_FEED = 'yt_pwa_default_feed';
+  var STORAGE_KEY_PLAYLIST = 'yt_pwa_saved_url';
 
-  // Targets used by manifest shortcuts (e.g. ./?go=subscriptions).
-  // Manifest shortcuts must stay inside the app scope, so they point here
-  // and this page forwards to the official YouTube URL.
-  var GO_TARGETS = {
-    home: YT_HOME,
+  var FEEDS = {
+    home: 'https://www.youtube.com/',
     subscriptions: 'https://www.youtube.com/feed/subscriptions',
     library: 'https://www.youtube.com/feed/library'
   };
 
-  var ALLOWED_HOSTS = ['youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com', 'youtu.be'];
-
-  // If the page is still visible this long after we asked the browser to go to
-  // YouTube, the navigation was handed to an in-app window (or was blocked).
-  // We then show a single "Open YouTube" button so the user is never stranded.
-  var FALLBACK_DELAY_MS = 1500;
-
-  function isOnline() {
-    return navigator.onLine !== false;
+  function getPreferredFeedKey() {
+    try {
+      var saved = localStorage.getItem(STORAGE_KEY_FEED);
+      if (saved && FEEDS[saved]) return saved;
+    } catch (e) {}
+    return 'subscriptions'; // Default to Subscriptions to avoid algorithmic Shorts shelf
   }
 
-  function isOfficialYouTubeUrl(value) {
-    try {
-      var u = new URL(value);
-      return (u.protocol === 'https:' || u.protocol === 'http:') && ALLOWED_HOSTS.indexOf(u.hostname.toLowerCase()) !== -1;
-    } catch (e) {
-      return false;
+  function getPreferredFeedUrl() {
+    return FEEDS[getPreferredFeedKey()] || FEEDS.subscriptions;
+  }
+
+  function isStandaloneMode() {
+    var params = new URLSearchParams(window.location.search);
+    if (params.get('mode') === 'standalone') return true;
+    if (window.matchMedia && (
+      window.matchMedia('(display-mode: standalone)').matches ||
+      window.matchMedia('(display-mode: fullscreen)').matches ||
+      window.matchMedia('(display-mode: window-controls-overlay)').matches
+    )) {
+      return true;
     }
-  }
-
-  // Identifies YouTube Shorts URLs specifically using reliable URL path signatures,
-  // never relying on video duration or aspect ratio.
-  function isShortsUrl(value) {
-    try {
-      var u = new URL(value);
-      if (ALLOWED_HOSTS.indexOf(u.hostname.toLowerCase()) === -1) return false;
-      return /^\/shorts(\/.*)?$/i.test(u.pathname);
-    } catch (e) {
-      return false;
-    }
-  }
-
-  // Extracts the video identifier from a /shorts/{videoId} path.
-  function extractShortsId(value) {
-    try {
-      var u = new URL(value);
-      var match = u.pathname.match(/^\/shorts\/([a-zA-Z0-9_-]+)/i);
-      return match ? match[1] : null;
-    } catch (e) {
-      return null;
-    }
-  }
-
-  // Converts a Shorts URL into a standard YouTube watch URL, bypassing the vertical
-  // Shorts player and opening the standard web player instead.
-  function convertShortsToRegularUrl(value) {
-    try {
-      var u = new URL(value);
-      var id = extractShortsId(value);
-      if (!id) return null;
-      var regularUrl = new URL('https://www.youtube.com/watch');
-      regularUrl.searchParams.set('v', id);
-      if (u.searchParams.has('t')) {
-        regularUrl.searchParams.set('t', u.searchParams.get('t'));
-      }
-      return regularUrl.toString();
-    } catch (e) {
-      return null;
-    }
-  }
-
-  // Returns the user's preferred launch feed (e.g. Subscriptions to bypass the Home Shorts shelf).
-  function getPreferredFeed() {
-    try {
-      var saved = localStorage.getItem(PREF_FEED_KEY);
-      if (saved && Object.prototype.hasOwnProperty.call(GO_TARGETS, saved)) {
-        return GO_TARGETS[saved];
-      }
-    } catch (e) { /* ignore */ }
-    return YT_HOME;
-  }
-
-  // ---- Direct launch ----------------------------------------------------
-  // This runs immediately (app.js is loaded in <head>), before the page body
-  // is parsed, so there is no launcher screen when started from the Home Screen.
-  //
-  // - Installed app (standalone / fullscreen / minimal-ui / iOS standalone):
-  //   go straight to preferred YouTube feed (Home or Subscriptions).
-  // - Manifest shortcut (?go=...): go to that YouTube page.
-  // - Direct video target (?url=...): if a Shorts URL is passed, intercept and
-  //   redirect to regular watch URL or preferred feed, preventing Shorts player launch.
-  // - Plain browser tab: stay on this page, because this is where the install
-  //   button / settings / instructions live.
-  function detectStandalone() {
-    try {
-      if (window.navigator.standalone === true) return true; // iOS Home Screen
-      var params = new URLSearchParams(location.search);
-      if (params.get('mode') === 'standalone') return true;
-      if (window.matchMedia) {
-        return window.matchMedia('(display-mode: standalone)').matches ||
-          window.matchMedia('(display-mode: fullscreen)').matches ||
-          window.matchMedia('(display-mode: minimal-ui)').matches ||
-          window.matchMedia('(display-mode: window-controls-overlay)').matches;
-      }
-    } catch (e) { /* fall through */ }
+    if (window.navigator.standalone === true) return true;
     return false;
   }
 
-  function readGoKey() {
+  function parseYouTubeUrl(input) {
+    if (!input || typeof input !== 'string') return null;
+    var trimmed = input.trim();
+    if (!trimmed) return null;
+    if (!/^https?:\/\//i.test(trimmed)) {
+      trimmed = 'https://' + trimmed;
+    }
     try {
-      var go = new URLSearchParams(location.search).get('go');
-      if (go && Object.prototype.hasOwnProperty.call(GO_TARGETS, go)) return go;
-    } catch (e) { /* ignore */ }
-    return null;
+      var u = new URL(trimmed);
+      var host = u.hostname.toLowerCase();
+      var isYt = (
+        host === 'youtube.com' ||
+        host === 'www.youtube.com' ||
+        host === 'm.youtube.com' ||
+        host === 'music.youtube.com' ||
+        host === 'youtu.be'
+      );
+      if (!isYt) return null;
+
+      // Detect Shorts URL: /shorts/{id}
+      var shortsMatch = u.pathname.match(/^\/shorts\/([a-zA-Z0-9_-]{5,})/);
+      if (shortsMatch) {
+        return {
+          isShorts: true,
+          videoId: shortsMatch[1],
+          originalUrl: u.href,
+          standardUrl: 'https://www.youtube.com/watch?v=' + encodeURIComponent(shortsMatch[1])
+        };
+      }
+
+      // Normalize mobile host m.youtube.com -> www.youtube.com if desired
+      return {
+        isShorts: false,
+        videoId: u.searchParams.get('v') || null,
+        originalUrl: u.href,
+        standardUrl: u.href
+      };
+    } catch (e) {
+      return null;
+    }
   }
 
-  function readTargetUrl() {
-    try {
-      var urlParam = new URLSearchParams(location.search).get('url');
-      if (urlParam && isOfficialYouTubeUrl(urlParam)) {
-        if (isShortsUrl(urlParam)) {
-          var regular = convertShortsToRegularUrl(urlParam);
-          return regular || getPreferredFeed();
-        }
-        return urlParam;
-      }
-    } catch (e) { /* ignore */ }
-    return null;
+  // Register Service Worker
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('service-worker.js').catch(function () {});
+    });
   }
 
-  var isStandalone = detectStandalone();
-  var goKey = readGoKey();
-  var targetUrl = readTargetUrl();
-  var launchTarget = targetUrl ? targetUrl : (goKey ? GO_TARGETS[goKey] : (isStandalone ? getPreferredFeed() : null));
-  var redirected = false;
+  // Prevent pull-to-refresh / overscroll trigger at top of page
+  var touchStartY = 0;
+  window.addEventListener('touchstart', function (e) {
+    if (e.touches && e.touches.length === 1) {
+      touchStartY = e.touches[0].clientY;
+    }
+  }, { passive: true });
 
-  if (isStandalone) document.documentElement.classList.add('is-standalone');
+  window.addEventListener('touchmove', function (e) {
+    if (!e.touches || e.touches.length !== 1) return;
+    var currentY = e.touches[0].clientY;
+    var isScrollingUp = currentY > touchStartY;
+    if (window.scrollY <= 0 && isScrollingUp && e.cancelable) {
+      e.preventDefault();
+    }
+  }, { passive: false });
 
-  if (launchTarget && isOnline()) {
-    redirected = true;
-    // replace(), not href=: the launcher never enters the history stack, so
-    // Back never returns to it and never re-triggers the redirect.
-    location.replace(launchTarget);
+  // Immediate Launch / Redirect check before DOM paints
+  var params = new URLSearchParams(window.location.search);
+  var goParam = params.get('go');
+  var urlParam = params.get('url');
+  var standalone = isStandaloneMode();
+
+  if (standalone) {
+    document.documentElement.classList.add('is-standalone');
   }
 
-  // ---- Everything below needs the DOM ----------------------------------
-  function init() {
-    function $(id) { return document.getElementById(id); }
+  // Determine if we should immediately redirect
+  var targetRedirect = null;
+  var interceptedShorts = null;
 
-    // ---- Offline handling ----------------------------------------------
-    var banner = $('offline-banner');
-    var resume = $('resume');
-    var resumeMsg = $('resume-msg');
-    var resumeOpen = $('resume-open');
-
-    function updateResumeLink() {
-      if (resumeOpen) {
-        resumeOpen.href = getPreferredFeed();
-      }
-    }
-    updateResumeLink();
-
-    function showResume(text) {
-      if (!resume) return;
-      resumeMsg.textContent = text || '';
-      resumeMsg.hidden = !text;
-      resume.hidden = false;
-    }
-
-    function updateOnlineState() {
-      banner.hidden = isOnline();
-    }
-
-    window.addEventListener('online', function () {
-      updateOnlineState();
-      // Installed app that was launched offline: go in as soon as we're back.
-      if (isStandalone && !redirected) {
-        redirected = true;
-        location.replace(launchTarget || getPreferredFeed());
-      }
-    });
-    window.addEventListener('offline', updateOnlineState);
-    updateOnlineState();
-
-    // Prevent navigation to YouTube while offline, and intercept any direct Shorts
-    // links clicked in the app to prevent opening the vertical Shorts player.
-    document.addEventListener('click', function (event) {
-      var link = event.target.closest && event.target.closest('a[href]');
-      if (!link) return;
-      var href = link.getAttribute('href') || '';
-      if (!href) return;
-
-      if (!isOnline() && href.indexOf('https://www.youtube.com') === 0) {
-        event.preventDefault();
-        banner.hidden = false;
-        banner.scrollIntoView({ block: 'nearest' });
-        return;
-      }
-
-      if (isShortsUrl(href)) {
-        event.preventDefault();
-        var regular = convertShortsToRegularUrl(href);
-        location.href = regular || getPreferredFeed();
-      }
-    });
-
-    $('search-form').addEventListener('submit', function (event) {
-      if (!isOnline()) {
-        event.preventDefault();
-        banner.hidden = false;
-      }
-    });
-
-    // ---- Installed app: fallback screen --------------------------------
-    if (isStandalone) {
-      if (!redirected) {
-        // Launched offline: the banner explains it; no extra text needed.
-        showResume('');
+  if (urlParam) {
+    var parsedParam = parseYouTubeUrl(urlParam);
+    if (parsedParam) {
+      if (parsedParam.isShorts) {
+        interceptedShorts = parsedParam;
       } else {
-        setTimeout(function () {
-          // Still here => the browser opened YouTube in an in-app window on
-          // top of us (it does this for any site outside the app's scope).
-          // If the user closes that window they land back here.
-          showResume('YouTube opens in its own window. If you closed it, tap below to reopen it.');
-        }, FALLBACK_DELAY_MS);
+        targetRedirect = parsedParam.standardUrl;
+      }
+    }
+  } else if (goParam && FEEDS[goParam]) {
+    targetRedirect = FEEDS[goParam];
+  } else if (standalone && !params.has('setup')) {
+    targetRedirect = getPreferredFeedUrl();
+  }
+
+  if (targetRedirect && navigator.onLine !== false) {
+    window.location.replace(targetRedirect);
+    return;
+  }
+
+  // DOM Interactive Setup
+  window.addEventListener('DOMContentLoaded', function () {
+    var offlineBanner = document.getElementById('offline-banner');
+    var resumeSection = document.getElementById('resume');
+    var resumeMsg = document.getElementById('resume-msg');
+    var resumeOpen = document.getElementById('resume-open');
+
+    function updateOnlineStatus() {
+      var online = navigator.onLine !== false;
+      if (offlineBanner) offlineBanner.hidden = online;
+      if (standalone && online && targetRedirect) {
+        window.location.replace(targetRedirect);
       }
     }
 
-    // ---- Default launch feed preference --------------------------------
-    var prefHome = $('pref-feed-home');
-    var prefSubs = $('pref-feed-subs');
-    var prefMsg = $('pref-msg');
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+    updateOnlineStatus();
 
-    function loadFeedPref() {
-      try {
-        var saved = localStorage.getItem(PREF_FEED_KEY);
-        if (saved === 'subscriptions') {
-          if (prefSubs) prefSubs.checked = true;
-        } else {
-          if (prefHome) prefHome.checked = true;
-        }
-      } catch (e) {
-        if (prefHome) prefHome.checked = true;
-      }
-    }
-    loadFeedPref();
-
-    function onPrefChange(value) {
-      try {
-        localStorage.setItem(PREF_FEED_KEY, value);
-        updateResumeLink();
-        if (prefMsg) {
-          prefMsg.textContent = value === 'subscriptions'
-            ? 'Saved: App will launch directly into Subscriptions (bypassing the Home Shorts shelf).'
-            : 'Saved: App will launch to YouTube Home.';
-        }
-      } catch (e) {
-        if (prefMsg) prefMsg.textContent = 'Could not save setting in this browser.';
+    // If running in standalone and didn't redirect (e.g. offline), show resume view
+    if (standalone && !params.has('setup') && !interceptedShorts) {
+      if (resumeSection) resumeSection.hidden = false;
+      if (resumeOpen) resumeOpen.href = targetRedirect || getPreferredFeedUrl();
+      if (resumeMsg) {
+        resumeMsg.hidden = false;
+        resumeMsg.textContent = navigator.onLine === false
+          ? 'Waiting for connection to open YouTube...'
+          : 'Tap below to continue to YouTube.';
       }
     }
 
-    if (prefHome) {
-      prefHome.addEventListener('change', function () {
-        if (prefHome.checked) onPrefChange('home');
-      });
-    }
-    if (prefSubs) {
-      prefSubs.addEventListener('change', function () {
-        if (prefSubs.checked) onPrefChange('subscriptions');
-      });
-    }
+    // Default Launch Feed radio controls
+    var radioHome = document.getElementById('pref-feed-home');
+    var radioSubs = document.getElementById('pref-feed-subs');
+    var prefMsg = document.getElementById('pref-msg');
+    var currentPref = getPreferredFeedKey();
 
-    // ---- User playlist / video link & Shorts interceptor ---------------
-    var playlistInput = $('playlist-input');
-    var playlistMsg = $('playlist-msg');
-    var shortsNotice = $('shorts-notice');
-    var shortsConvertBtn = $('shorts-convert-btn');
-    var shortsFeedBtn = $('shorts-feed-btn');
-    var pendingShortsUrl = null;
+    if (radioHome && radioSubs) {
+      radioHome.checked = (currentPref === 'home');
+      radioSubs.checked = (currentPref === 'subscriptions');
 
-    function setMsg(text) { if (playlistMsg) playlistMsg.textContent = text; }
-
-    function hideShortsNotice() {
-      if (shortsNotice) shortsNotice.hidden = true;
-      pendingShortsUrl = null;
-    }
-
-    function showShortsNotice(url) {
-      pendingShortsUrl = url;
-      if (shortsNotice) {
-        shortsNotice.hidden = false;
-        shortsNotice.scrollIntoView({ block: 'nearest' });
+      function onFeedChange(e) {
+        var val = e.target.value;
+        try {
+          localStorage.setItem(STORAGE_KEY_FEED, val);
+          if (prefMsg) {
+            prefMsg.textContent = 'Saved! Launching from Home Screen will open ' +
+              (val === 'subscriptions' ? 'Subscriptions (No Home Shorts).' : 'YouTube Home.');
+          }
+          if (resumeOpen) resumeOpen.href = getPreferredFeedUrl();
+        } catch (err) {}
       }
+      radioHome.addEventListener('change', onFeedChange);
+      radioSubs.addEventListener('change', onFeedChange);
     }
 
-    if (shortsConvertBtn) {
-      shortsConvertBtn.addEventListener('click', function () {
-        if (!pendingShortsUrl) return;
-        var regular = convertShortsToRegularUrl(pendingShortsUrl);
-        if (regular) {
-          location.href = regular;
-        } else {
-          location.href = getPreferredFeed();
-        }
-      });
-    }
-
-    if (shortsFeedBtn) {
-      shortsFeedBtn.addEventListener('click', function () {
-        location.href = getPreferredFeed();
-      });
-    }
-
-    function readSaved() {
-      try { return localStorage.getItem(STORAGE_KEY) || ''; } catch (e) { return ''; }
-    }
-
-    function writeSaved(value) {
-      try {
-        if (value) localStorage.setItem(STORAGE_KEY, value);
-        else localStorage.removeItem(STORAGE_KEY);
-        return true;
-      } catch (e) {
-        return false;
-      }
-    }
-
-    var saved = readSaved();
-    if (saved && isOfficialYouTubeUrl(saved)) {
-      if (isShortsUrl(saved)) {
-        // Discard any previously saved Shorts URLs
-        writeSaved('');
-      } else {
-        playlistInput.value = saved;
-      }
-    }
-
-    function validatedInput() {
-      hideShortsNotice();
-      var value = playlistInput.value.trim();
-      if (!value) { setMsg('Paste a YouTube link first.'); return null; }
-      if (!isOfficialYouTubeUrl(value)) {
-        setMsg('Only https links on youtube.com or youtu.be are allowed.');
-        return null;
-      }
-      return value;
-    }
-
-    $('playlist-form').addEventListener('submit', function (event) {
-      event.preventDefault();
-      var value = validatedInput();
-      if (!value) return;
-      if (!isOnline()) { banner.hidden = false; setMsg('You are offline.'); return; }
-
-      // Intercept Shorts URLs: do not navigate directly to the Shorts player
-      if (isShortsUrl(value)) {
-        setMsg('YouTube Shorts playback is blocked in this app.');
-        showShortsNotice(value);
-        return;
-      }
-
-      setMsg('');
-      location.href = value;
-    });
-
-    $('playlist-save').addEventListener('click', function () {
-      var value = validatedInput();
-      if (!value) return;
-
-      if (isShortsUrl(value)) {
-        setMsg('Shorts links cannot be saved. Please use a regular video or playlist link.');
-        showShortsNotice(value);
-        return;
-      }
-
-      setMsg(writeSaved(value) ? 'Saved on this device.' : 'Could not save in this browser.');
-    });
-
-    $('playlist-clear').addEventListener('click', function () {
-      playlistInput.value = '';
-      hideShortsNotice();
-      writeSaved('');
-      setMsg('Cleared.');
-    });
-
-    // ---- Install prompt (Android/Chromium) and iOS hint ----------------
-    var installCard = $('install-card');
-    var installBtn = $('install-btn');
-    var iosHint = $('ios-hint');
+    // Install Prompt Handling
+    var installCard = document.getElementById('install-card');
+    var installBtn = document.getElementById('install-btn');
+    var iosHint = document.getElementById('ios-hint');
     var deferredPrompt = null;
 
-    var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
-      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    var ua = navigator.userAgent || '';
+    var isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    var isAndroid = /Android/i.test(ua);
 
-    if (!isStandalone) {
-      if (isIOS) {
-        installCard.hidden = false;
-        iosHint.hidden = false;
-      }
+    if (isIOS && !standalone) {
+      if (installCard) installCard.hidden = false;
+      if (iosHint) iosHint.hidden = false;
+    }
 
-      window.addEventListener('beforeinstallprompt', function (event) {
-        event.preventDefault();
-        deferredPrompt = event;
-        installCard.hidden = false;
-        installBtn.hidden = false;
-      });
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault();
+      deferredPrompt = e;
+      if (installCard) installCard.hidden = false;
+      if (installBtn) installBtn.hidden = false;
+    });
 
+    if (installBtn) {
       installBtn.addEventListener('click', function () {
         if (!deferredPrompt) return;
         deferredPrompt.prompt();
         deferredPrompt.userChoice.then(function () {
           deferredPrompt = null;
           installBtn.hidden = true;
-          installCard.hidden = true;
         });
       });
-
-      window.addEventListener('appinstalled', function () {
-        installCard.hidden = true;
-      });
     }
 
-    // ---- Device Detection & Filter Helper -------------------------------
-    var detectedDeviceEl = $('detected-device-name');
-    var copyBtn = $('copy-filters-btn');
-    var copyStatus = $('copy-status');
+    // Device Environment Detection & Guidance
+    var detectedNameEl = document.getElementById('detected-device-name');
+    var adviceAndroid = document.getElementById('advice-android');
+    var adviceIos = document.getElementById('advice-ios');
+    var adviceDesktop = document.getElementById('advice-desktop');
 
-    var isIOSDevice = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
-      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    var isAndroidDevice = /android/i.test(navigator.userAgent);
-    var isWindowsDevice = /windows/i.test(navigator.userAgent);
-    var isMacDevice = /macintosh|mac os x/i.test(navigator.userAgent) && !isIOSDevice;
+    var isBrave = (navigator.brave && typeof navigator.brave.isBrave === 'function') || /Brave/i.test(ua);
 
-    var detectedName = 'Desktop / Unknown Browser';
-    if (isIOSDevice) detectedName = 'iOS / iPadOS (Safari)';
-    else if (isAndroidDevice) detectedName = 'Android (' + (/chrome|crios/i.test(navigator.userAgent) ? 'Chrome' : 'Mobile Browser') + ')';
-    else if (isWindowsDevice) detectedName = 'Windows (' + (/edg/i.test(navigator.userAgent) ? 'Edge' : (/chrome/i.test(navigator.userAgent) ? 'Chrome' : 'Browser')) + ')';
-    else if (isMacDevice) detectedName = 'macOS (Safari / Chrome)';
+    function setDeviceGuidance(envLabel, showEl) {
+      if (detectedNameEl) detectedNameEl.textContent = envLabel;
+      if (adviceAndroid) adviceAndroid.hidden = (showEl !== adviceAndroid);
+      if (adviceIos) adviceIos.hidden = (showEl !== adviceIos);
+      if (adviceDesktop) adviceDesktop.hidden = (showEl !== adviceDesktop);
+    }
 
-    if (detectedDeviceEl) detectedDeviceEl.textContent = detectedName;
+    if (isAndroid) {
+      setDeviceGuidance(isBrave ? 'Android (Brave Browser)' : 'Android Mobile Browser', adviceAndroid);
+    } else if (isIOS) {
+      setDeviceGuidance('iOS / iPadOS', adviceIos);
+    } else {
+      setDeviceGuidance('Desktop Browser', adviceDesktop);
+    }
 
-    var adviceAndroid = $('advice-android');
-    var adviceIos = $('advice-ios');
-    var adviceDesktop = $('advice-desktop');
+    if (navigator.brave && typeof navigator.brave.isBrave === 'function') {
+      navigator.brave.isBrave().then(function (braveDetected) {
+        if (braveDetected && isAndroid && detectedNameEl) {
+          detectedNameEl.textContent = 'Android (Brave Browser)';
+        }
+      }).catch(function () {});
+    }
 
-    if (isAndroidDevice && adviceAndroid) adviceAndroid.hidden = false;
-    else if (isIOSDevice && adviceIos) adviceIos.hidden = false;
-    else if (adviceDesktop) adviceDesktop.hidden = false;
+    // Playlist / Video Link & Shorts Interceptor
+    var playlistForm = document.getElementById('playlist-form');
+    var playlistInput = document.getElementById('playlist-input');
+    var playlistSave = document.getElementById('playlist-save');
+    var playlistClear = document.getElementById('playlist-clear');
+    var playlistMsg = document.getElementById('playlist-msg');
+    var shortsNotice = document.getElementById('shorts-notice');
+    var shortsConvertBtn = document.getElementById('shorts-convert-btn');
+    var shortsFeedBtn = document.getElementById('shorts-feed-btn');
 
-    function fallbackCopy(text) {
-      var ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.focus();
-      ta.select();
+    var pendingShortsObj = interceptedShorts;
+
+    function showShortsNotice(shortsObj) {
+      pendingShortsObj = shortsObj;
+      if (shortsNotice) shortsNotice.hidden = false;
+      if (playlistMsg) playlistMsg.textContent = 'Shorts URL intercepted before opening.';
+    }
+
+    function hideShortsNotice() {
+      pendingShortsObj = null;
+      if (shortsNotice) shortsNotice.hidden = true;
+    }
+
+    if (interceptedShorts) {
+      document.documentElement.classList.remove('is-standalone');
+      if (playlistInput) playlistInput.value = interceptedShorts.originalUrl;
+      showShortsNotice(interceptedShorts);
+    } else {
       try {
-        document.execCommand('copy');
-        if (copyStatus) copyStatus.textContent = 'Filter rules copied to clipboard!';
-        setTimeout(function () { if (copyStatus) copyStatus.textContent = ''; }, 3000);
-      } catch (e) {
-        if (copyStatus) copyStatus.textContent = 'Select and copy the rules from the box below.';
-      }
-      document.body.removeChild(ta);
+        var savedUrl = localStorage.getItem(STORAGE_KEY_PLAYLIST);
+        if (savedUrl && playlistInput) playlistInput.value = savedUrl;
+      } catch (e) {}
     }
 
-    if (copyBtn) {
-      copyBtn.addEventListener('click', function () {
-        var codeEl = $('filter-rules-code');
-        var text = codeEl ? codeEl.textContent : '';
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(text).then(function () {
-            if (copyStatus) copyStatus.textContent = 'Filter rules copied to clipboard!';
-            setTimeout(function () { if (copyStatus) copyStatus.textContent = ''; }, 3000);
-          }).catch(function () {
-            fallbackCopy(text);
-          });
-        } else {
-          fallbackCopy(text);
+    if (shortsConvertBtn) {
+      shortsConvertBtn.addEventListener('click', function () {
+        if (pendingShortsObj && pendingShortsObj.standardUrl) {
+          window.location.href = pendingShortsObj.standardUrl;
         }
       });
     }
 
-    // ---- Service worker -------------------------------------------------
-    if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-      window.addEventListener('load', function () {
-        navigator.serviceWorker.register('service-worker.js').catch(function () {
-          /* The app still works without a service worker. */
-        });
+    if (shortsFeedBtn) {
+      shortsFeedBtn.addEventListener('click', function () {
+        window.location.href = getPreferredFeedUrl();
       });
     }
-  }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
+    if (playlistForm) {
+      playlistForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        hideShortsNotice();
+        var raw = playlistInput ? playlistInput.value : '';
+        var parsed = parseYouTubeUrl(raw);
+        if (!parsed) {
+          if (playlistMsg) playlistMsg.textContent = 'Please enter a valid YouTube URL.';
+          return;
+        }
+        if (parsed.isShorts) {
+          showShortsNotice(parsed);
+          return;
+        }
+        window.location.href = parsed.standardUrl;
+      });
+    }
+
+    if (playlistSave) {
+      playlistSave.addEventListener('click', function () {
+        hideShortsNotice();
+        var raw = playlistInput ? playlistInput.value : '';
+        var parsed = parseYouTubeUrl(raw);
+        if (!parsed) {
+          if (playlistMsg) playlistMsg.textContent = 'Enter a valid YouTube URL to save.';
+          return;
+        }
+        if (parsed.isShorts) {
+          showShortsNotice(parsed);
+          if (playlistMsg) playlistMsg.textContent = 'Shorts URLs cannot be saved directly. Convert to standard video first.';
+          return;
+        }
+        try {
+          localStorage.setItem(STORAGE_KEY_PLAYLIST, parsed.standardUrl);
+          if (playlistInput) playlistInput.value = parsed.standardUrl;
+          if (playlistMsg) playlistMsg.textContent = 'Saved to this device.';
+        } catch (e) {}
+      });
+    }
+
+    if (playlistClear) {
+      playlistClear.addEventListener('click', function () {
+        hideShortsNotice();
+        if (playlistInput) playlistInput.value = '';
+        try {
+          localStorage.removeItem(STORAGE_KEY_PLAYLIST);
+          if (playlistMsg) playlistMsg.textContent = 'Cleared saved link.';
+        } catch (e) {}
+      });
+    }
+
+    // Copy Cosmetic Filter Rules button
+    var copyFiltersBtn = document.getElementById('copy-filters-btn');
+    var filterRulesCode = document.getElementById('filter-rules-code');
+    var copyStatus = document.getElementById('copy-status');
+
+    if (copyFiltersBtn && filterRulesCode) {
+      copyFiltersBtn.addEventListener('click', function () {
+        var text = filterRulesCode.textContent || '';
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () {
+            if (copyStatus) copyStatus.textContent = 'Filter rules copied to clipboard!';
+          }).catch(function () {
+            if (copyStatus) copyStatus.textContent = 'Could not copy automatically. Please select and copy manually.';
+          });
+        }
+      });
+    }
+  });
 })();

@@ -1,37 +1,17 @@
-[Adblock Plus 2.0]
-! Title: YouTube Shorts Blocker Filter List
-! Description: Completely hides YouTube Shorts shelves, buttons, recommendations, and search results on desktop and mobile web.
-! Version: 1.0.0
-! Homepage: https://github.com/
-
-! ===================================================================
-! 1. HOME FEED: Hide Shorts Shelves & Reels
-! ===================================================================
+! Hide YouTube Shorts shelves on Home and Search
 youtube.com##ytd-rich-shelf-renderer[is-shorts]
 youtube.com##ytd-reel-shelf-renderer
 youtube.com##ytm-reel-shelf-renderer
 youtube.com##grid-shelf-renderer:has(a[href*="/shorts/"])
-youtube.com##ytd-rich-section-renderer:has(ytd-rich-shelf-renderer[is-shorts])
 
-! ===================================================================
-! 2. NAVIGATION: Hide Shorts Tab & Sidebar Links
-! ===================================================================
+! Hide Shorts navigation buttons and links
 youtube.com##ytd-guide-entry-renderer:has(a[title="Shorts"])
 youtube.com##ytd-mini-guide-entry-renderer[aria-label="Shorts"]
 youtube.com##ytm-pivot-bar-item-renderer:has(div.pivot-shorts)
 youtube.com##ytm-pivot-bar-item-renderer[aria-label="Shorts"]
 youtube.com##a[href^="/shorts"]
 
-! ===================================================================
-! 3. RECOMMENDATIONS: Hide Shorts from Sidebar & Up Next
-! ===================================================================
+! Hide Shorts in search results & recommendations
+youtube.com##ytd-video-renderer:has(a[href*="/shorts/"])
 youtube.com##ytd-compact-video-renderer:has(a[href*="/shorts/"])
 youtube.com##ytm-video-with-context-renderer:has(a[href*="/shorts/"])
-youtube.com##ytd-item-section-renderer:has(a[href*="/shorts/"])
-
-! ===================================================================
-! 4. SEARCH RESULTS: Hide Shorts from Search Pages
-! ===================================================================
-youtube.com##ytd-video-renderer:has(a[href*="/shorts/"])
-youtube.com##ytd-reel-item-renderer
-youtube.com##ytm-compact-video-renderer:has(a[href*="/shorts/"])
